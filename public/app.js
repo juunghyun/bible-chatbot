@@ -70,8 +70,8 @@ async function sendMessage() {
     sendBtn.disabled = false;
 }
 
-// ===== API 호출 =====
-async function callAPI(message) {
+// ===== API 호출 (자동 재시도 포함) =====
+async function callAPI(message, retries = 2) {
     const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,13 +83,18 @@ async function callAPI(message) {
 
     const data = await res.json().catch(() => null);
 
+    // 429(Too Many Requests) 또는 503(서버 과부하) → 자동 재시도
+    if ((res.status === 429 || res.status === 503 || (data?.error && data.error.includes('high demand'))) && retries > 0) {
+        await new Promise(r => setTimeout(r, 2000));
+        return callAPI(message, retries - 1);
+    }
+
     if (!res.ok || !data) {
         const errorMsg = data?.error || `서버 응답 오류 (${res.status})`;
-        // 에러 메시지를 화면에 표시하여 디버깅 가능
         return {
             agentName: '시스템',
             agentIcon: '⚠️',
-            content: `<strong>오류가 발생했습니다</strong><br><br>${errorMsg}<br><br>폴백 응답으로 전환합니다.`,
+            content: `<strong>오류가 발생했습니다</strong><br><br>${errorMsg}<br><br>잠시 후 다시 시도해주세요.`,
             references: [],
             related: [],
             _fallback: true
