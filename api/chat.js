@@ -88,7 +88,7 @@ module.exports = async (req, res) => {
         // Gemini API 호출
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.5-flash-lite-preview-06-17',
             systemInstruction: SYSTEM_PROMPT,
             generationConfig: {
                 temperature: 0.7,
