@@ -97,11 +97,22 @@ module.exports = async (req, res) => {
             },
         });
 
-        // 대화 히스토리 구성
-        const chatHistory = (history || []).map(h => ({
+        // 대화 히스토리 구성 — 반드시 user로 시작, user/model 교대
+        let chatHistory = (history || []).map(h => ({
             role: h.role === 'user' ? 'user' : 'model',
             parts: [{ text: h.content }],
         }));
+
+        // 첫 메시지가 user가 아니면 앞부분 잘라내기
+        while (chatHistory.length > 0 && chatHistory[0].role !== 'user') {
+            chatHistory.shift();
+        }
+
+        // user/model 교대가 아닌 연속된 같은 역할 제거
+        chatHistory = chatHistory.filter((msg, i) => {
+            if (i === 0) return true;
+            return msg.role !== chatHistory[i - 1].role;
+        });
 
         const chat = model.startChat({ history: chatHistory });
         const result = await chat.sendMessage(message);
