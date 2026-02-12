@@ -1,6 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// ===== 사용량 제한 (메모리 기반, 서버리스 특성상 인스턴스 간 공유 안됨) =====
+// ===== 사용량 제한 =====
 const usageMap = new Map();
 const DAILY_LIMIT = parseInt(process.env.DAILY_LIMIT || '300', 10);
 
@@ -31,14 +31,14 @@ const SYSTEM_PROMPT = `당신은 "성경 도우미" AI입니다. 한국어로 �
 - 신학/교리 관련 → "신학 전문가" (아이콘: ✝️)
 - 기타 → "안내" (아이콘: 🤖)
 
-## 응답 JSON 형식
+## 응답 규칙
 반드시 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 절대 포함하지 마세요.
 {
   "agentName": "에이전트 이름",
   "agentIcon": "이모지 아이콘",
-  "content": "HTML 형식의 답변 (줄바꿈은 <br>, 강조는 <strong>)",
+  "content": "HTML 형식의 답변 본문. 줄바꿈은 <br> 태그, 강조는 <strong> 태그를 사용",
   "references": [
-    {"verse": "성경 구절 위치", "text": "구절 본문"}
+    {"verse": "성경 구절 위치 예) 창세기 1:1", "text": "해당 구절 본문 텍스트"}
   ],
   "related": [
     "연관 질문 1",
@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey === '여기에_API키를_입력하세요') {
         return res.status(500).json({
-            error: 'API 키가 설정되지 않았습니다.',
+            error: 'GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. Vercel 대시보드 → Settings → Environment Variables에서 설정해주세요.',
             fallback: true
         });
     }
@@ -88,13 +88,12 @@ module.exports = async (req, res) => {
         // Gemini API 호출
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-1.5-flash',
             systemInstruction: SYSTEM_PROMPT,
             generationConfig: {
                 temperature: 0.7,
                 topP: 0.9,
                 maxOutputTokens: 2048,
-                responseMimeType: 'application/json',
             },
         });
 
@@ -111,12 +110,25 @@ module.exports = async (req, res) => {
         // JSON 파싱
         let parsed;
         try {
-            parsed = JSON.parse(text);
+            // ```json ... ``` 블록에서 추출 시도
+            const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+            const jsonStr = codeBlockMatch ? codeBlockMatch[1].trim() : text.trim();
+            parsed = JSON.parse(jsonStr);
         } catch {
             // JSON 파싱 실패 시 텍스트에서 JSON 부분 추출 시도
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                parsed = JSON.parse(jsonMatch[0]);
+                try {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } catch {
+                    parsed = {
+                        agentName: '안내',
+                        agentIcon: '🤖',
+                        content: text.replace(/\n/g, '<br>'),
+                        references: [],
+                        related: [],
+                    };
+                }
             } else {
                 parsed = {
                     agentName: '안내',
@@ -130,9 +142,9 @@ module.exports = async (req, res) => {
 
         return res.status(200).json(parsed);
     } catch (err) {
-        console.error('Gemini API Error:', err);
+        console.error('Gemini API Error:', err.message || err);
         return res.status(500).json({
-            error: '답변을 생성하는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+            error: `API 오류: ${err.message || '알 수 없는 오류'}`,
             fallback: true
         });
     }

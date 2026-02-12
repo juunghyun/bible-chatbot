@@ -77,19 +77,26 @@ async function callAPI(message) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             message,
-            history: chatHistory.slice(-10)  // 최근 5턴만 전송
+            history: chatHistory.slice(-10)
         }),
     });
 
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        if (err.fallback) {
-            return getFallbackResponse(message);
-        }
-        throw new Error(err.error || '서버 오류');
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data) {
+        const errorMsg = data?.error || `서버 응답 오류 (${res.status})`;
+        // 에러 메시지를 화면에 표시하여 디버깅 가능
+        return {
+            agentName: '시스템',
+            agentIcon: '⚠️',
+            content: `<strong>오류가 발생했습니다</strong><br><br>${errorMsg}<br><br>폴백 응답으로 전환합니다.`,
+            references: [],
+            related: [],
+            _fallback: true
+        };
     }
 
-    return await res.json();
+    return data;
 }
 
 // ===== 카드 퇴장 애니메이션 =====

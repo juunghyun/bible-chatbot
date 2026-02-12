@@ -4,11 +4,10 @@
     "description": "성경 도우미 AI 챗봇",
     "scripts": {
         "dev": "npx vercel dev",
-        "build": "echo 'Static site — no build step'",
         "start": "npx serve public"
     },
     "dependencies": {
-        "@google/generative-ai": "^0.21.0"
+        "@google/generative-ai": "^0.14.0"
     },
     "engines": {
         "node": ">=18"
